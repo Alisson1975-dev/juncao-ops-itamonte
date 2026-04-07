@@ -291,11 +291,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="p-10 max-w-[1400px] mx-auto w-full flex-grow text-center">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10 justify-items-center">
+      <main className="p-10 max-w-[1400px] mx-auto w-full flex-grow">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10">
           
           <div onClick={() => setScreen('juncao')} className="bg-white w-56 h-56 rounded-[2rem] shadow hover:shadow-2xl border border-slate-100 p-6 flex flex-col justify-between cursor-pointer transition-all hover:-translate-y-2 group">
-            <span className="text-black font-black text-sm uppercase leading-tight text-left">Junção de OPs</span>
+            <span className="text-black font-black text-sm uppercase leading-tight">Junção de OPs</span>
             <div className="mt-auto flex items-end justify-between">
               <Combine size={52} className="text-slate-50 group-hover:text-blue-500 transition-colors" />
               <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-600 transition-all"><ArrowLeft size={16} className="text-slate-300 rotate-180 group-hover:text-white" /></div>
