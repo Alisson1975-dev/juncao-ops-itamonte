@@ -1,7 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, getDoc } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, doc, setDoc, onSnapshot, getDoc, deleteDoc } from 'firebase/firestore';
+import { 
+  Search, Settings, Trash2, Edit2, CheckCircle, Save, X, 
+  FileSpreadsheet, Copy, ClipboardPaste, LayoutGrid, 
+  ArrowLeft, Package, Combine, Plus, ListOrdered, RefreshCw, Loader2
+} from 'lucide-react';
 
 // --- CONFIGURAÇÃO FIREBASE REAL (PCP ITAMONTE) ---
 const firebaseConfig = {
@@ -16,15 +21,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'juncao-ops-v1';
+const appId = 'central-alisson-v1';
 
-const Icons = {
-  Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
-  Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
-  Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-};
-
-export default function App() {
+// --- MÓDULO 01: JUNÇÃO DE OPs ---
+function ModuloJuncao({ onBack, user }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -32,11 +32,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [pasteTarget, setPasteTarget] = useState(null);
-  const [user, setUser] = useState(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [btnLabels, setBtnLabels] = useState(['TR', 'TI', 'TS', 'TL']);
-  const fileInputRef = useRef(null);
-  const manualPasteRef = useRef(null);
 
   const [data, setData] = useState(() => 
     Array.from({ length: 600 }, (_, i) => ({
@@ -45,252 +42,280 @@ export default function App() {
   );
 
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        const docSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tableContent', 'current'));
-        if (docSnap.exists() && !isDataLoaded) {
-          setData(docSnap.data().rows);
-          setIsDataLoaded(true);
-        }
-      }
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'tableContent', 'current'), (snap) => {
+      if (snap.exists() && !isDataLoaded) setData(snap.data().rows);
+      setIsDataLoaded(true);
     });
+    return () => unsub();
+  }, [user, isDataLoaded]);
+
+  const handleSave = async () => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tableContent', 'current'), { rows: data });
+    setMessage({ text: "Dados salvos!", type: "info" });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const p1 = data.filter(r => r.tabela === 'azul' && (String(r.item).toLowerCase().includes(searchTerm.toLowerCase())));
+  const p2 = data.filter(r => r.tabela === 'verde' && (String(r.item).toLowerCase().includes(searchTerm.toLowerCase())));
+
+  return (
+    <div className="flex flex-col h-screen bg-slate-100 animate-in fade-in duration-300">
+      <header className="bg-black h-12 flex items-center justify-between px-6 shrink-0 z-50 shadow-md">
+        <div className="flex items-center gap-4 text-white">
+          <button onClick={onBack} className="p-1.5 hover:bg-white/10 rounded transition-all"><ArrowLeft size={18} /></button>
+          <div className="font-black text-sm uppercase tracking-tighter">Junção de OPs</div>
+        </div>
+        <button onClick={() => setShowSettings(true)} className="text-white/50 hover:text-white"><Settings size={18} /></button>
+      </header>
+
+      <div className="bg-white p-4 border-b border-slate-200 flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Transformação</span>
+          <div className="flex gap-1.5">{btnLabels.map(l => <button key={l} className="px-7 py-1.5 bg-black text-white rounded-lg text-[10px] font-black uppercase shadow-md">{l}</button>)}</div>
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Comandos</span>
+          <div className="flex gap-1.5">
+            <button onClick={() => setShowManualPaste(true)} className="px-5 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-md">Colar Dados</button>
+            <button className="px-5 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase shadow-md">Gerar Seq.</button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-4">
+          <button onClick={handleSave} className="px-8 py-1.5 bg-green-600 text-white rounded-lg text-[10px] font-black uppercase shadow-md">Salvar</button>
+          <button className="px-8 py-1.5 bg-red-600 text-white rounded-lg text-[10px] font-black uppercase shadow-md">Limpar</button>
+        </div>
+      </div>
+
+      <div className="flex-grow flex p-4 gap-4 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-white rounded-2xl border shadow-sm overflow-hidden">
+          <div className="bg-black h-10 flex items-center justify-between px-4 text-white">
+            <span className="font-black text-[10px] uppercase">Parte 01</span>
+            <button className="bg-yellow-400 text-black px-3 py-1 rounded text-[9px] font-black uppercase">Copiar Itens</button>
+          </div>
+          <div className="flex-grow overflow-auto p-2">
+            <table className="w-full text-[10px] text-center border-collapse">
+              <thead className="sticky top-0 bg-slate-50 border-b font-black uppercase text-slate-500">
+                <tr><th className="py-2 w-8"></th><th className="w-12">Seq.</th><th>Item</th><th className="w-24">Qtd.</th><th className="w-32">Data</th></tr>
+              </thead>
+              <tbody className="divide-y">
+                {p1.map(r => (
+                  <tr key={r.id} className="h-8 hover:bg-slate-50">
+                    <td><input type="checkbox" checked={r.checked} onChange={() => {}} /></td>
+                    <td className="font-bold text-slate-400">{r.sequencia}</td>
+                    <td className="font-bold">{r.item}</td>
+                    <td>{r.quantidade}</td><td>{r.data}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col bg-white rounded-2xl border shadow-sm overflow-hidden">
+          <div className="bg-black h-10 flex items-center justify-between px-4 text-white">
+            <span className="font-black text-[10px] uppercase">Parte 02</span>
+            <button className="bg-yellow-400 text-black px-3 py-1 rounded text-[9px] font-black uppercase">Copiar Dados</button>
+          </div>
+          <div className="flex-grow overflow-auto p-2">
+            <table className="w-full text-[10px] text-center border-collapse">
+              <thead className="sticky top-0 bg-slate-50 border-b font-black uppercase text-slate-500">
+                <tr><th className="py-2 w-8"></th><th className="w-12">Seq.</th><th>Item</th><th className="w-24">Qtd.</th><th className="w-32">Data</th></tr>
+              </thead>
+              <tbody className="divide-y">
+                {p2.map(r => (
+                  <tr key={r.id} className="h-8 hover:bg-slate-50">
+                    <td><input type="checkbox" checked={r.checked} onChange={() => {}} /></td>
+                    <td className="font-bold text-slate-400">{r.sequencia}</td>
+                    <td className="font-bold">{r.item}</td>
+                    <td>{r.quantidade}</td><td>{r.data}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {showManualPaste && <div className="fixed inset-0 z-[500] bg-black/60 flex items-center justify-center p-4"><div className="bg-white p-8 rounded-[2rem] w-full max-w-lg text-center"><h3 className="font-black uppercase mb-4 text-slate-800">Colar Dados</h3><textarea className="w-full h-40 border p-4 mb-4 rounded-xl outline-none" placeholder="Cole aqui..." /><button onClick={() => setShowManualPaste(false)} className="px-6 py-2 bg-slate-100 rounded-xl font-bold uppercase text-xs">Fechar</button></div></div>}
+    </div>
+  );
+}
+
+// --- MÓDULO 02: ALOCAÇÃO MG1 - PCP ---
+function ModuloAlocacao({ onBack, user }) {
+  const [allocations, setAllocations] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [lossValue, setLossValue] = useState(200);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const stateDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'appState', 'snapshot');
+
+  useEffect(() => {
+    if (!user) return;
+    const load = async () => {
+      const docSnap = await getDoc(stateDocRef);
+      if (docSnap.exists() && !isDataLoaded) setAllocations(docSnap.data().allocations || []);
+      setIsDataLoaded(true);
+    };
+    load();
+  }, [user, isDataLoaded]);
+
+  const handleSaveToCloud = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await setDoc(stateDocRef, { allocations, updatedAt: Date.now() });
+      setMessage({ text: "Sincronizado com sucesso!", type: "success" });
+    } catch (err) { setMessage({ text: "Erro ao salvar", type: "error" }); }
+    finally { setIsSaving(false); setTimeout(() => setMessage(null), 3000); }
+  };
+
+  const handleClearAll = async () => {
+    if (window.confirm("Deseja apagar tudo no ecrã e na nuvem?")) {
+      setAllocations([]);
+      await deleteDoc(stateDocRef);
+      setMessage({ text: "Tudo limpo!", type: "info" });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const filtered = allocations.filter(item => String(item.maquina || '').toLowerCase().includes(searchTerm.toLowerCase()));
+
+  return (
+    <div className="flex flex-col h-screen bg-slate-100 animate-in fade-in duration-300">
+      {message && <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[300] px-6 py-2 rounded-full text-white font-black text-xs uppercase shadow-xl ${message.type === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>{message.text}</div>}
+      
+      <header className="bg-black h-12 flex items-center justify-between px-6 shrink-0 z-50 shadow-md">
+        <div className="flex items-center gap-4 text-white">
+          <button onClick={onBack} className="p-1.5 hover:bg-white/10 rounded transition-all"><ArrowLeft size={18} /></button>
+          <div className="font-black text-sm uppercase tracking-tighter">Alocação MG1 - PCP</div>
+        </div>
+        <div className="flex items-center gap-3">
+           <div className="relative">
+             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+             <input type="text" className="bg-white/10 border-none rounded text-xs pl-9 pr-4 py-1.5 text-white outline-none w-48" placeholder="Filtrar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+           </div>
+           <Settings size={18} className="text-white/50" />
+        </div>
+      </header>
+
+      <main className="p-6 flex flex-col gap-6 flex-grow overflow-hidden">
+        <div className="bg-white p-4 rounded-3xl border shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div className="flex gap-2">
+            <button className="bg-blue-600 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase shadow-lg shadow-blue-100">+ Nova Alocação</button>
+            <button onClick={handleSaveToCloud} disabled={isSaving} className="bg-emerald-600 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase shadow-lg flex items-center gap-2">
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} SALVAR
+            </button>
+            <button onClick={handleClearAll} className="bg-red-600 text-white px-6 py-2.5 rounded-2xl font-black text-xs uppercase shadow-lg">LIMPAR</button>
+          </div>
+          <div className="flex gap-2">
+            <button className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase">Incluir</button>
+            <button className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase">Sequenciar</button>
+            <button className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase">Junção</button>
+            <button className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase">Copiar Dados</button>
+          </div>
+        </div>
+
+        <div className="flex-grow bg-white rounded-[2rem] border shadow-sm overflow-hidden flex flex-col">
+          <div className="overflow-auto flex-grow">
+            <table className="w-full text-center border-collapse">
+              <thead className="sticky top-0 z-10 bg-slate-50 border-b text-[10px] font-black uppercase text-slate-500">
+                <tr className="h-12">
+                  <th className="bg-blue-600 text-white w-12">Seq.</th>
+                  <th className="bg-blue-600 text-white">Máquina</th>
+                  <th className="bg-blue-600 text-white">Item</th>
+                  <th className="bg-blue-600 text-white">Item Final</th>
+                  <th className="bg-blue-600 text-white w-auto">Descrição</th>
+                  <th className="bg-blue-600 text-white">Qtd (kg)</th>
+                  <th className="bg-yellow-400 text-black">OP</th>
+                  <th className="bg-yellow-400 text-black">Perda</th>
+                  <th className="bg-yellow-400 text-black">Status</th>
+                  <th className="bg-slate-800 text-white w-16">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y text-[11px]">
+                {filtered.length === 0 ? (
+                  <tr><td colSpan="10" className="py-20 text-slate-300 font-bold uppercase italic">Nenhum registo encontrado</td></tr>
+                ) : (
+                  filtered.map(item => (
+                    <tr key={item.id} className="h-12 hover:bg-slate-50">
+                      <td className="font-black text-blue-600">{item.sequencia}</td>
+                      <td className="font-bold">{item.maquina}</td>
+                      <td className="font-semibold text-slate-600">{item.item}</td>
+                      <td className="font-mono">{item.itemFinal}</td>
+                      <td className="text-left px-4 truncate max-w-[200px]">{item.descricao}</td>
+                      <td className="font-black text-blue-600 tabular-nums">{item.quantidade}</td>
+                      <td className="font-bold text-slate-700">{item.ordemProducao}</td>
+                      <td><button className="bg-emerald-500 text-white px-3 py-1 rounded-lg font-black">{lossValue}</button></td>
+                      <td><span className="bg-slate-100 px-3 py-1 rounded-full text-[9px] font-black uppercase text-slate-400">{item.status}</span></td>
+                      <td><div className="flex justify-center gap-1"><Edit2 size={14} className="text-yellow-600" /><Trash2 size={14} className="text-red-500" /></div></td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-slate-50 px-6 py-3 border-t text-[10px] font-black uppercase text-slate-400 flex justify-between">
+            <span>Total: {filtered.length} / 800</span>
+            <span>Salve manualmente para persistir na nuvem</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// --- COMPONENTE PRINCIPAL: DASHBOARD ---
+export default function App() {
+  const [screen, setScreen] = useState('dashboard');
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, setUser);
+    signInAnonymously(auth);
     const script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
     document.body.appendChild(script);
   }, []);
 
-  const showActionMessage = useCallback((msg) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(null), 3000);
-  }, []);
-
-  const handleManualSave = async () => {
-    if (!user) return;
-    try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tableContent', 'current'), { rows: data });
-      showActionMessage("Dados guardados!");
-    } catch (err) { showActionMessage("Erro ao salvar."); }
-  };
-
-  const handleTransformPrefix = (newPrefix) => {
-    setData(prev => prev.map(row => {
-      const shouldTransform = prev.some(r => r.checked) ? row.checked : (row.tabela === 'azul');
-      if (shouldTransform && row.item) {
-        const itemStr = String(row.item).trim();
-        if (itemStr.length >= 2) return { ...row, item: newPrefix + itemStr.slice(2) };
-      }
-      return row;
-    }));
-  };
-
-  const handleSequenciarOPs = () => {
-    const opMap = {};
-    data.slice(300, 600).forEach(r => { if (r.sequencia && r.ordemProducao) opMap[String(r.sequencia)] = r.ordemProducao; });
-    setData(prev => prev.map((r, i) => (i < 300 && r.sequencia && opMap[String(r.sequencia)]) ? { ...r, ordemProducao: opMap[String(r.sequencia)] } : r));
-  };
-
-  const handleJuntarQuantidades = () => {
-    const part1 = data.slice(0, 300).filter(r => r.item && r.sequencia);
-    const groups = {};
-    part1.forEach(r => {
-      const s = String(r.sequencia);
-      if (!groups[s]) groups[s] = { s: r.sequencia, i: r.item, q: 0, d: r.data };
-      const raw = String(r.quantidade || "0").replace(/\./g, '').replace(',', '.');
-      groups[s].q += parseFloat(raw) || 0;
-    });
-    const ag = Object.values(groups).sort((a, b) => Number(a.s) - Number(b.s));
-    setData(prev => prev.map((r, i) => {
-      if (i >= 300) {
-        const item = ag[i - 300];
-        return item ? { ...r, sequencia: item.s, item: item.i, quantidade: item.q.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), data: item.d } : r;
-      }
-      return r;
-    }));
-  };
-
-  const handleGerarSequencia = () => {
-    let s = 0, last = null;
-    setData(prev => prev.map((r, i) => {
-      if (i < 300) {
-        const cur = String(r.item || "").trim();
-        if (!cur) return r;
-        if (cur !== last) { s++; last = cur; }
-        return { ...r, sequencia: s };
-      }
-      return r;
-    }));
-  };
-
-  const processPastedText = (text, target) => {
-    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-    setData(prev => {
-      const next = [...prev];
-      if (target === 'geral') {
-        lines.slice(0, 300).forEach((line, index) => {
-          const cols = line.split(/\t/);
-          next[index] = { ...next[index], item: cols[0]?.trim() || "", quantidade: cols[1]?.trim() || "", data: cols[2]?.trim() || "" };
-        });
-      } else if (target === 'op') {
-        lines.forEach((line, i) => { if (i + 300 < 600) next[i+300].ordemProducao = line.trim(); });
-      }
-      return next;
-    });
-    setShowManualPaste(false);
-  };
-
-  const filteredData = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return data.filter(row => 
-      (row.sequencia && String(row.sequencia).toLowerCase().includes(term)) ||
-      (row.item && String(row.item).toLowerCase().includes(term)) ||
-      (row.ordemProducao && String(row.ordemProducao).toLowerCase().includes(term))
-    );
-  }, [data, searchTerm]);
-
-  const leftTableData = useMemo(() => filteredData.filter(row => row.tabela === 'azul'), [filteredData]);
-  const rightTableData = useMemo(() => filteredData.filter(row => row.tabela === 'verde'), [filteredData]);
+  if (screen === 'juncao') return <ModuloJuncao user={user} onBack={() => setScreen('dashboard')} />;
+  if (screen === 'alocacao') return <ModuloAlocacao user={user} onBack={() => setScreen('dashboard')} />;
 
   return (
-    <div className="min-h-screen bg-slate-100 p-2 md:p-4 font-sans flex flex-col text-slate-900">
-      
-      {message && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-6 py-2 rounded-full shadow-2xl animate-in fade-in slide-in-from-top-2">
-          <span className="text-xs font-black uppercase tracking-widest">{message}</span>
+    <div className="min-h-screen bg-slate-50 font-sans flex flex-col text-slate-900">
+      <header className="bg-black h-12 flex items-center justify-between px-6 shrink-0 z-50">
+        <div className="flex items-center gap-4">
+          <div className="bg-white/10 p-1.5 rounded cursor-pointer hover:bg-white/20 transition-all"><LayoutGrid size={20} className="text-white" /></div>
+          <div className="text-white font-black text-sm uppercase tracking-tight">PÁGINA INICIAL</div>
         </div>
-      )}
+      </header>
 
-      {showManualPaste && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl">
-            <h3 className="font-black uppercase mb-4 text-slate-900 text-center text-sm">Colagem Manual</h3>
-            <textarea ref={manualPasteRef} className="w-full h-40 p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl outline-none text-xs font-mono mb-4 text-slate-700" placeholder="Cole aqui..." onChange={(e) => processPastedText(e.target.value, pasteTarget)}/>
-            <button onClick={() => setShowManualPaste(false)} className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-black uppercase text-xs">Voltar</button>
+      <main className="p-10 max-w-[1400px] mx-auto w-full flex-grow text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-10 justify-items-center">
+          
+          <div onClick={() => setScreen('juncao')} className="bg-white w-56 h-56 rounded-[2rem] shadow hover:shadow-2xl border border-slate-100 p-6 flex flex-col justify-between cursor-pointer transition-all hover:-translate-y-2 group">
+            <span className="text-black font-black text-sm uppercase leading-tight text-left">Junção de OPs</span>
+            <div className="mt-auto flex items-end justify-between">
+              <Combine size={52} className="text-slate-50 group-hover:text-blue-500 transition-colors" />
+              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-600 transition-all"><ArrowLeft size={16} className="text-slate-300 rotate-180 group-hover:text-white" /></div>
+            </div>
           </div>
+
+          <div onClick={() => setScreen('alocacao')} className="bg-white w-56 h-56 rounded-[2rem] shadow hover:shadow-2xl border border-slate-100 p-6 flex flex-col justify-between cursor-pointer transition-all hover:-translate-y-2 group">
+            <span className="text-black font-black text-sm uppercase leading-tight text-left">Alocação MG1 - PCP</span>
+            <div className="mt-auto flex items-end justify-between">
+              <Package size={52} className="text-slate-50 group-hover:text-emerald-500 transition-colors" />
+              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-emerald-600 transition-all"><ArrowLeft size={16} className="text-slate-300 rotate-180 group-hover:text-white" /></div>
+            </div>
+          </div>
+
         </div>
-      )}
+      </main>
 
-      <div className="max-w-[1800px] mx-auto w-full flex flex-col h-[calc(100vh-2rem)] gap-4">
-        
-        {/* CABEÇALHO - CONFIGURADO EXATAMENTE COMO NO PRINT */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm shrink-0">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-black uppercase tracking-tight text-slate-800">Junção de OPs</h1>
-            <div className="flex items-center gap-2">
-              <input type="text" placeholder="Pesquisar..." className="w-64 px-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500/20" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
-              <button className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-400"><Icons.Settings /></button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-4 border-t border-slate-100 pt-6">
-            {/* GRUPO TRANSFORMAÇÃO */}
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Transformação</span>
-              <div className="flex gap-2">
-                {btnLabels.map((l) => (
-                  <button key={l} onClick={() => handleTransformPrefix(l)} className="px-10 py-1.5 bg-black text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95">{l}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* GRUPO COMANDOS */}
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Comandos</span>
-              <div className="flex gap-2">
-                <button onClick={() => { setPasteTarget('geral'); setShowManualPaste(true); }} className="px-8 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95">Colar Dados</button>
-                <button onClick={handleGerarSequencia} className="px-8 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95">Gerar Sequência</button>
-                <button onClick={handleJuntarQuantidades} className="px-8 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95">Juntar Quantidades</button>
-                <button onClick={handleSequenciarOPs} className="px-8 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95">Sequenciar OPs</button>
-              </div>
-            </div>
-
-            {/* GRUPO AÇÕES FINAIS (SALVAR / LIMPAR) */}
-            <div className="flex flex-col items-center gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-0">Ações</span>
-              <div className="flex gap-2">
-                <button onClick={handleManualSave} className="px-12 py-1.5 bg-green-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95 hover:bg-green-700">Salvar</button>
-                <button onClick={() => setShowClearConfirm(true)} className="px-12 py-1.5 bg-red-600 text-white rounded-lg text-[11px] font-black uppercase shadow-md active:scale-95 hover:bg-red-700">Limpar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* TABELAS ORIGINAIS */}
-        <div className="flex-grow flex flex-col md:flex-row gap-4 overflow-hidden">
-          {/* PARTE 01 */}
-          <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-full">
-            <div className="bg-black px-4 py-2 flex items-center justify-between text-white relative">
-              <h2 className="font-black text-xs uppercase tracking-widest">Parte 01</h2>
-              <div className="absolute left-1/2 -translate-x-1/2 flex gap-2">
-                <button className="bg-yellow-400 text-black px-4 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-sm">Copiar Item</button>
-                <button className="bg-yellow-400 text-black px-4 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-sm">Copiar OP</button>
-              </div>
-              <span className="text-[9px] font-black bg-white/10 px-2 py-0.5 rounded">300 LINHAS</span>
-            </div>
-            <div className="flex-grow overflow-auto scrollbar-thin">
-              <table className="w-full text-center border-collapse table-fixed">
-                <thead className="sticky top-0 bg-slate-50 text-[9px] font-black text-slate-500 uppercase border-b z-10">
-                  <tr><th className="w-8"></th><th className="w-8"></th><th className="w-12">Seq.</th><th className="w-28">Item</th><th className="w-28">Qtd.</th><th className="w-32">Data</th></tr>
-                </thead>
-                <tbody className="divide-y text-[10px]">
-                  {leftTableData.map(r => (
-                    <tr key={r.id} className="h-8 hover:bg-slate-50">
-                      <td><input type="checkbox" checked={r.checked} onChange={() => setData(prev => prev.map(x => x.id === r.id ? {...x, checked: !x.checked} : x))} /></td>
-                      <td className="text-yellow-600"><Icons.Edit /></td>
-                      <td className="font-black text-slate-400">{r.sequencia}</td>
-                      <td className="font-bold truncate px-1">{r.item}</td>
-                      <td className="font-mono">{r.quantidade}</td>
-                      <td className="truncate px-1">{r.data}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* PARTE 02 */}
-          <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-full">
-            <div className="bg-black px-4 py-2 flex items-center justify-between text-white relative">
-              <h2 className="font-black text-xs uppercase tracking-widest">Parte 02</h2>
-              <div className="absolute left-1/2 -translate-x-1/2 flex gap-2">
-                <button className="bg-yellow-400 text-black px-4 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-sm">Colar OPs</button>
-                <button className="bg-yellow-400 text-black px-4 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-sm">Copiar Dados</button>
-              </div>
-              <span className="text-[9px] font-black bg-white/10 px-2 py-0.5 rounded">300 LINHAS</span>
-            </div>
-            <div className="flex-grow overflow-auto scrollbar-thin">
-              <table className="w-full text-center border-collapse table-fixed">
-                <thead className="sticky top-0 bg-slate-50 text-[9px] font-black text-slate-500 uppercase border-b z-10">
-                  <tr><th className="w-8"></th><th className="w-8"></th><th className="w-12">Seq.</th><th className="w-28">Item</th><th className="w-28">Qtd.</th><th className="w-32">Data</th></tr>
-                </thead>
-                <tbody className="divide-y text-[10px]">
-                  {rightTableData.map(r => (
-                    <tr key={r.id} className="h-8 hover:bg-slate-50">
-                      <td><input type="checkbox" checked={r.checked} onChange={() => setData(prev => prev.map(x => x.id === r.id ? {...x, checked: !x.checked} : x))} /></td>
-                      <td className="text-yellow-600"><Icons.Edit /></td>
-                      <td className="font-black text-slate-400">{r.sequencia}</td>
-                      <td className="font-bold truncate px-1">{r.item}</td>
-                      <td className="font-mono">{r.quantidade}</td>
-                      <td className="truncate px-1">{r.data}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* RODAPÉ */}
-        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4 text-blue-700 text-[10px] font-black uppercase">
-            <span className="bg-blue-50 px-4 py-1.5 rounded-full border border-blue-100 shadow-sm">Registos Ativos: {data.filter(r => r.item).length} / 600</span>
-            <span className="text-green-600 flex items-center gap-1.5 italic">● Online</span>
-          </div>
-          <button className="px-10 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all">Importar Excel</button>
-        </div>
-      </div>
-      <style>{`.scrollbar-thin::-webkit-scrollbar { width: 4px; } .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }`}</style>
+      <footer className="p-6 text-center text-[9px] text-slate-400 font-black uppercase tracking-[0.4em] bg-white border-t">
+        Gestão Centralizada
+      </footer>
     </div>
   );
 }
